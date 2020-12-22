@@ -45,38 +45,47 @@ def gstreamer_pipeline(
 def face_detect():
 
     face_cascade = cv2.CascadeClassifier("/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml")
-    eye_cascade = cv2.CascadeClassifier("/usr/share/opencv4/haarcascades/haarcascade_eye.xml")
+    eye_cascade  = cv2.CascadeClassifier("/usr/share/opencv4/haarcascades/haarcascade_eye.xml")
 
     capText = gstreamer_pipeline(capture_width=1280, capture_height=720, framerate=60,
-                                flip_method=0, display_width=640, display_height=360) # WS values
+                                flip_method=0, display_width=320, display_height=180) # WS values
 
     cap = cv2.VideoCapture(capText, cv2.CAP_GSTREAMER)  # WS mod
-    if cap.isOpened():
-        cv2.namedWindow("Face Detect", cv2.WINDOW_AUTOSIZE)
-        while cv2.getWindowProperty("Face Detect", 0) >= 0:
-            ret, img = cap.read()
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            faces = face_cascade.detectMultiScale(gray, 1.3, 5)
 
-            for (x, y, w, h) in faces:
-                cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2)
-                roi_gray  = gray[y : y + h, x : x + w]
-                roi_color = img[y : y + h, x : x + w]
-                eyes = eye_cascade.detectMultiScale(roi_gray)
-                for (ex, ey, ew, eh) in eyes:
-                    cv2.rectangle(roi_color, (ex, ey), (ex + ew, ey + eh), (0, 255, 0), 2)
+    #if cap.isOpened():  # WS mod
+    cv2.namedWindow("Face Detect", cv2.WINDOW_AUTOSIZE)
 
-            cv2.imshow("Face Detect", img)
-            keyCode = cv2.waitKey(30) & 0xFF
-            # Stop the program on the ESC key
-            if keyCode == 27:
-                break
+    #while cv2.getWindowProperty("Face Detect", 0) >= 0:  # WS mod to try to reduce latency
+    while True: # WS mod
 
-        cap.release()
-        cv2.destroyAllWindows()
-    else:
-        print("Unable to open camera")
+        ret, img = cap.read()
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+
+        for (x, y, w, h) in faces:
+            cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2)
+            # WS turned off eyes to pick up speed: not much of an improvement
+            #roi_gray  = gray[y : y + h, x : x + w]
+            #roi_color = img[y : y + h, x : x + w]
+            #eyes = eye_cascade.detectMultiScale(roi_gray)
+            #for (ex, ey, ew, eh) in eyes:
+            #    cv2.rectangle(roi_color, (ex, ey), (ex + ew, ey + eh), (0, 255, 0), 2)
+
+        cv2.imshow("Face Detect", img)
+        cv2.moveWindow("Face Detect", 0, 0)  # WS mod
+
+        keyCode = cv2.waitKey(1) & 0xFF  # WS mod: 30 to 1: improved latency a little
+
+        if keyCode == 27:  # Stop the program on the ESC key
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+    #else:
+    #    print("Unable to open camera")
 
 
 if __name__ == "__main__":
+
     face_detect()
