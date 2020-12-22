@@ -40,11 +40,13 @@ def gstreamer_pipeline(
         )
     )
 
-
 def show_camera():
     # To flip the image, modify the flip_method parameter (0 and 2 are the most common)
-    print(gstreamer_pipeline(flip_method=0))
-    cap = cv2.VideoCapture(gstreamer_pipeline(flip_method=0), cv2.CAP_GSTREAMER)
+
+    capText = gstreamer_pipeline(capture_width=3264, capture_height=2464, framerate=21,
+                                flip_method=0, display_width=640, display_height=480) # WS values
+
+    cap = cv2.VideoCapture(capText, cv2.CAP_GSTREAMER)
     if cap.isOpened():
         window_handle = cv2.namedWindow("CSI Camera", cv2.WINDOW_AUTOSIZE)
         # Window
@@ -52,12 +54,14 @@ def show_camera():
             ret_val, img = cap.read()
             cv2.imshow("CSI Camera", img)
             # This also acts as
-            keyCode = cv2.waitKey(30) & 0xFF
+            keyCode = cv2.waitKey(1) & 0xFF
             # Stop the program on the ESC key
             if keyCode == 27:
                 break
         cap.release()
         cv2.destroyAllWindows()
+        print(capText)  # WS mod
+
     else:
         print("Unable to open camera")
 
