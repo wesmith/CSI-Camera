@@ -32,25 +32,23 @@ class CSI_Camera:
         # OpenCV video capture element
         self.video_capture = None
         # The last captured image from the camera
-        self.frame = None
+        self.frame   = None
         self.grabbed = False
         # The thread where the video capture runs
         self.read_thread = None
-        self.read_lock = threading.Lock()
-        self.running = False
-
+        self.read_lock   = threading.Lock()
+        self.running     = False
 
     def open(self, gstreamer_pipeline_string):
         try:
-            self.video_capture = cv2.VideoCapture(
-                gstreamer_pipeline_string, cv2.CAP_GSTREAMER
-            )
+            self.video_capture = cv2.VideoCapture(gstreamer_pipeline_string, cv2.CAP_GSTREAMER)
             
         except RuntimeError:
             self.video_capture = None
             print("Unable to open camera")
             print("Pipeline: " + gstreamer_pipeline_string)
             return
+
         # Grab the first frame to start the video capturing
         self.grabbed, self.frame = self.video_capture.read()
 
@@ -60,7 +58,7 @@ class CSI_Camera:
             return None
         # create a thread to read the camera image
         if self.video_capture != None:
-            self.running=True
+            self.running = True
             self.read_thread = threading.Thread(target=self.updateCamera)
             self.read_thread.start()
         return self
@@ -79,9 +77,7 @@ class CSI_Camera:
                     self.frame=frame
             except RuntimeError:
                 print("Could not read image from camera")
-        # FIX ME - stop and cleanup thread
-        # Something bad happened
-        
+                #self.stop() # WS mod
 
     def read(self):
         with self.read_lock:
@@ -102,7 +98,7 @@ class CSI_Camera:
 # Here we directly select sensor_mode 3 (1280x720, 59.9999 fps)
 def gstreamer_pipeline(
     sensor_id=0,
-    sensor_mode=3,
+    #sensor_mode=3,  # WS mod
     capture_width=1280,
     capture_height=720,
     display_width=1280,
@@ -110,8 +106,9 @@ def gstreamer_pipeline(
     framerate=30,
     flip_method=0,
 ):
+    #"sensor-mode=%d ! "  # WS removed sensor-mode to be able to override it
     return (
-        "nvarguscamerasrc sensor-id=%d sensor-mode=%d ! "
+        "nvarguscamerasrc sensor-id=%d ! "
         "video/x-raw(memory:NVMM), "
         "width=(int)%d, height=(int)%d, "
         "format=(string)NV12, framerate=(fraction)%d/1 ! "
@@ -121,7 +118,7 @@ def gstreamer_pipeline(
         "video/x-raw, format=(string)BGR ! appsink"
         % (
             sensor_id,
-            sensor_mode,
+            #sensor_mode, # WS mod
             capture_width,
             capture_height,
             framerate,
@@ -133,28 +130,34 @@ def gstreamer_pipeline(
 
 
 def start_cameras():
+
     left_camera = CSI_Camera()
     left_camera.open(
         gstreamer_pipeline(
             sensor_id=0,
-            sensor_mode=3,
+            #sensor_mode=3,   # WS mod from 3 to 0: mode 0 gave error; removed sensor-mode
             flip_method=0,
-            display_height=540,
-            display_width=960,
+            framerate=21, #30, #21,         # WS mod: overwriting sensor_mode
+            capture_width=3264, #1280, #1920, #3264,   # WS mod: overwriting sensor_mode
+            capture_height=2464, #720, #1080, #2464,   # WS mod: overwriting sensor_mode
+            display_width=640,  #960,        # WS mod
+            display_height=480, #360, #480, #540   # WS mod
         )
     )
     left_camera.start()
 
+    # WS mod webcam: this has just 4:3 ratio: not sure how to control its params: it is a black box;
+    # when running with picam, need picam at 3264x2464 to get 4:3; all other picam modes are 16:9
     right_camera = CSI_Camera()
-    right_camera.open(
+    right_camera.open(1)
+    '''
         gstreamer_pipeline(
             sensor_id=1,
             sensor_mode=3,
             flip_method=0,
             display_height=540,
-            display_width=960,
-        )
-    )
+            display_width=960,))
+    '''
     right_camera.start()
 
     cv2.namedWindow("CSI Cameras", cv2.WINDOW_AUTOSIZE)
@@ -173,10 +176,12 @@ def start_cameras():
         
         _ , left_image=left_camera.read()
         _ , right_image=right_camera.read()
+        # WS mod when a webcam is used as the right camera
+        right_image = cv2.resize(right_image, (left_image.shape[1], left_image.shape[0]))
         camera_images = np.hstack((left_image, right_image))
         cv2.imshow("CSI Cameras", camera_images)
 
-        # This also acts as
+        # WS NOTE: 30 has less video latency than 1: it gives the threads time to process
         keyCode = cv2.waitKey(30) & 0xFF
         # Stop the program on the ESC key
         if keyCode == 27:
