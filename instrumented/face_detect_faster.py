@@ -30,13 +30,22 @@ def read_camera(csi_camera,display_fps):
     return camera_image
 
 # WS mods/additions
-# for 1280x720 modes 3,4: 1/2 scale
-DISP_W_M3_one_half = 640
-DISP_H_M3_one_half = 360
 
-# for 1280x720 modes 3,4: 1/4 scale
-DISP_W_M3_one_quarter = 320
-DISP_H_M3_one_quarter = 180
+# For 3264x2464 mode 0: 1/4 scale
+DISP_W_M0_one_quarter = 816
+DISP_H_M0_one_quarter = 616
+
+# For 3264x2464 mode 0: 1/8 scale
+DISP_W_M0_one_eighth = 408
+DISP_H_M0_one_eighth = 308
+
+# For 3264x1848 mode 1: 1/4 scale
+DISP_W_M1_one_quarter = 816
+DISP_H_M1_one_quarter = 462
+
+# For 3264x1848 mode 1: 1/8 scale
+DISP_W_M1_one_eighth = 408
+DISP_H_M1_one_eighth = 231
 
 # For 1920x1080 mode 2: 1/2 scale
 DISP_W_M2_one_half = 960
@@ -46,17 +55,29 @@ DISP_H_M2_one_half = 540
 DISP_W_M2_one_quarter = 480
 DISP_H_M2_one_quarter = 270
 
-# 1920x1080, 30 fps
+# for 1280x720 modes 3,4: 1/2 scale
+DISP_W_M3_M4_one_half = 640
+DISP_H_M3_M4_one_half = 360
+
+# for 1280x720 modes 3,4: 1/4 scale
+DISP_W_M3_M4_one_quarter = 320
+DISP_H_M3_M4_one_quarter = 180
+
+# 3264x2464, 21 fps  4:3 ratio
+S_MODE_0_3264_2464_21 = 0
+# 3264x1848, 28 fps 16:9 ratio
+S_MODE_1_3264_1848_28 = 1
+# 1920x1080, 30 fps 16:9 ratio
 S_MODE_2_1920_1080_30 = 2
-# 1280x720, 60 fps
+# 1280x720,  60 fps 16:9 ratio
 S_MODE_3_1280_720_60  = 3
-# 1280x720, 120 fps
+# 1280x720, 120 fps 16:9 ratio
 S_MODE_4_1280_720_120 = 4
 
 
 def face_detect(sensor_mode=S_MODE_3_1280_720_60,
-                dispW=DISP_W_M3_one_half,
-                dispH=DISP_H_M3_one_half):
+                dispW=DISP_W_M3_M4_one_half,
+                dispH=DISP_H_M3_M4_one_half):
 
     face_cascade = cv2.CascadeClassifier(
         "/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml"
@@ -65,10 +86,12 @@ def face_detect(sensor_mode=S_MODE_3_1280_720_60,
         "/usr/share/opencv4/haarcascades/haarcascade_eye.xml"
     )
     left_camera = CSI_Camera()
+
+    # WS mod: IMPORTANT use lowest fps = 21 as default, otherwise modes 0 or 1 crash: reboot required
     left_camera.create_gstreamer_pipeline(
             sensor_id=0,
             sensor_mode=sensor_mode,
-            framerate=30,
+            framerate=21,
             flip_method=0,
             display_height=dispH,
             display_width=dispW,
@@ -119,6 +142,6 @@ def face_detect(sensor_mode=S_MODE_3_1280_720_60,
 
 
 if __name__ == "__main__":
-    face_detect(sensor_mode=S_MODE_4_1280_720_120,
-                dispW=DISP_W_M3_one_half,
-                dispH=DISP_H_M3_one_half)
+    face_detect(sensor_mode=S_MODE_0_3264_2464_21,
+                dispW=DISP_W_M0_one_quarter,
+                dispH=DISP_H_M0_one_quarter)
