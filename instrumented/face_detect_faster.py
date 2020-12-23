@@ -29,19 +29,35 @@ def read_camera(csi_camera,display_fps):
         draw_label(camera_image, "Frames Read (PS): "+str(csi_camera.last_frames_read),(10,40))
     return camera_image
 
-# Good for 1280x720
-DISPLAY_WIDTH=640
-DISPLAY_HEIGHT=360
-# For 1920x1080
-# DISPLAY_WIDTH=960
-# DISPLAY_HEIGHT=540
+# WS mods/additions
+# for 1280x720 modes 3,4: 1/2 scale
+DISP_W_M3_one_half = 640
+DISP_H_M3_one_half = 360
+
+# for 1280x720 modes 3,4: 1/4 scale
+DISP_W_M3_one_quarter = 320
+DISP_H_M3_one_quarter = 180
+
+# For 1920x1080 mode 2: 1/2 scale
+DISP_W_M2_one_half = 960
+DISP_H_M2_one_half = 540
+
+# For 1920x1080 mode 2: 1/4 scale
+DISP_W_M2_one_quarter = 480
+DISP_H_M2_one_quarter = 270
 
 # 1920x1080, 30 fps
-SENSOR_MODE_1080=2
+S_MODE_2_1920_1080_30 = 2
 # 1280x720, 60 fps
-SENSOR_MODE_720=3
+S_MODE_3_1280_720_60  = 3
+# 1280x720, 120 fps
+S_MODE_4_1280_720_120 = 4
 
-def face_detect():
+
+def face_detect(sensor_mode=S_MODE_3_1280_720_60,
+                dispW=DISP_W_M3_one_half,
+                dispH=DISP_H_M3_one_half):
+
     face_cascade = cv2.CascadeClassifier(
         "/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml"
     )
@@ -51,15 +67,16 @@ def face_detect():
     left_camera = CSI_Camera()
     left_camera.create_gstreamer_pipeline(
             sensor_id=0,
-            sensor_mode=SENSOR_MODE_720,
+            sensor_mode=sensor_mode,
             framerate=30,
             flip_method=0,
-            display_height=DISPLAY_HEIGHT,
-            display_width=DISPLAY_WIDTH,
+            display_height=dispH,
+            display_width=dispW,
     )
     left_camera.open(left_camera.gstreamer_pipeline)
     left_camera.start()
-    cv2.namedWindow("Face Detect", cv2.WINDOW_AUTOSIZE)
+    txt = "Face Detect: Sensor Mode {}, Display {} x {}".format(sensor_mode, dispW, dispH)  # WS mod
+    cv2.namedWindow(txt, cv2.WINDOW_AUTOSIZE)
 
     if (
         not left_camera.video_capture.isOpened()
@@ -72,7 +89,7 @@ def face_detect():
     try:
         # Start counting the number of frames read and displayed
         left_camera.start_counting_fps()
-        while cv2.getWindowProperty("Face Detect", 0) >= 0 :
+        while cv2.getWindowProperty(txt, 0) >= 0 :
             img=read_camera(left_camera,False)
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             faces = face_cascade.detectMultiScale(gray, 1.3, 5)
@@ -89,7 +106,7 @@ def face_detect():
             if show_fps:
                 draw_label(img, "Frames Displayed (PS): "+str(left_camera.last_frames_displayed),(10,20))
                 draw_label(img, "Frames Read (PS): "+str(left_camera.last_frames_read),(10,40))
-            cv2.imshow("Face Detect", img)
+            cv2.imshow(txt, img)
             left_camera.frames_displayed += 1
             keyCode = cv2.waitKey(5) & 0xFF
             # Stop the program on the ESC key
@@ -102,4 +119,6 @@ def face_detect():
 
 
 if __name__ == "__main__":
-    face_detect()
+    face_detect(sensor_mode=S_MODE_4_1280_720_120,
+                dispW=DISP_W_M3_one_half,
+                dispH=DISP_H_M3_one_half)
