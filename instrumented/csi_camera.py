@@ -112,6 +112,13 @@ class CSI_Camera:
     def gstreamer_pipeline(self):
         return self._gstreamer_pipeline
 
+    # WS mod: Set the default framerate parameter to 21, the minimum for all modes: the sensor_mode
+    #         overrides this anyway, so no need to use this parameter. It was found that if the
+    #         framerate parameter exceeds the sensor_mode's default framerate setting (eg, 28 for
+    #         mode 1) the program will core dump with a message that the framerate is exceeding
+    #         the default, and a reboot of the nano is required to run again with the corrected
+    #         framerate.
+
     # Currently there are setting frame rate on CSI Camera on Nano through gstreamer
     # Here we directly select sensor_mode 3 (1280x720, 59.9999 fps)
     def create_gstreamer_pipeline(
@@ -120,7 +127,7 @@ class CSI_Camera:
         sensor_mode=3,
         display_width=1280,
         display_height=720,
-        framerate=60,
+        framerate=21,
         flip_method=0,
     ):
         self._gstreamer_pipeline = (
