@@ -7,7 +7,7 @@ import numpy as np
 import ws_csi_camera as ws
 from importlib import reload
 
-#reload(ws)  # since ws is under development
+reload(ws)  # ws is under development
 
 def display(sensor_mode=ws.S_MODE_3_1280_720_60, 
             dispW=ws.DISP_W_M3_M4_one_half, 
@@ -32,9 +32,6 @@ def display(sensor_mode=ws.S_MODE_3_1280_720_60,
     txt = "Picam on left: Sensor Mode {}, Display {} x {}".format(sensor_mode, dispW, dispH)
     cv2.namedWindow(txt, cv2.WINDOW_AUTOSIZE)
 
-    picam.start_counting_fps()
-    webcam.start_counting_fps()
-
     while True:
 
         _, imgL = picam.read()
@@ -44,9 +41,6 @@ def display(sensor_mode=ws.S_MODE_3_1280_720_60,
         img = np.hstack((imgL, imgR))
 
         cv2.imshow(txt, img)
-
-        picam.frames_displayed  += 1
-        webcam.frames_displayed += 1
 
         keyCode = cv2.waitKey(5) & 0xFF
         
@@ -62,7 +56,7 @@ def display(sensor_mode=ws.S_MODE_3_1280_720_60,
 
 if __name__ == "__main__":
 
-    display(sensor_mode=ws.S_MODE_0_3264_2464_21, 
-            dispW=ws.DISP_W_M0_one_eighth, dispH=ws.DISP_H_M0_one_eighth)
+    display(sensor_mode=ws.S_MODE_2_1920_1080_30, 
+            dispW=ws.DISP_W_M2_one_quarter, dispH=ws.DISP_H_M2_one_quarter)
 
 

@@ -4,15 +4,20 @@
 
 # CSI_Camera is a class which encapsulates an OpenCV VideoCapture element
 # The VideoCapture element is initialized via a GStreamer pipeline
-# The camera is read in a separate thread 
-# The class also tracks how many frames are read from the camera;
-# The class tracks the frames_displayed (WS mod)
+# The camera is read in a separate thread
 
-# modified to ws_csi_camera.py 12/23/20 by WSmith to get everything associated with the
-# CSI camera in one place
+# The class also tracks how many frames/sec are grabbed in the thread from the camera, and
+# how many frames/sec are read by the outside program. Both of these can be displayed on 
+# the image as 'frames grabbed' and 'frames read' respectively. Frames 'grabbed' are closest
+# to the camera's actual framerate. Frames 'read' will be slower, depending upon how much 
+# processing per frame is performed in the calling program.
+
+# Modified to ws_csi_camera.py 12/23/20 by WSmith to get everything associated with the
+# CSI camera in one place, and simplify the frame-rate estimates. 
 
 import cv2
 import threading
+from time import time
 
 # WS mods/additions
 
@@ -60,14 +65,9 @@ S_MODE_3_1280_720_60  = 3
 S_MODE_4_1280_720_120 = 4
 
 
-class RepeatTimer(threading.Timer):
-    def run(self):
-        while not self.finished.wait(self.interval):
-            self.function(*self.args, **self.kwargs)
-
 class CSI_Camera:
 
-    def __init__ (self, display_fps=True):
+    def __init__ (self, display_fps=True, alpha=0.95):
 
         # OpenCV video capture element
         self.display_fps = display_fps
@@ -79,20 +79,21 @@ class CSI_Camera:
         self.read_thread = None
         self.read_lock = threading.Lock()
         self.running = False
-        self.fps_timer=None
-        self.frames_read=0
-        self.frames_displayed=0
-        self.last_frames_read=0
-        self.last_frames_displayed=0
         self.font_face = cv2.FONT_HERSHEY_SIMPLEX
-        self.scale = 0.5           # for FPS text size
+        self.scale = .6             # for FPS text size
         self.color = (255,255,255) # for FPS text color
+        self.last_grab = time()
+        self.last_time = time()
+        self.fps       = 0         # grabbed frames/sec in camera thread
+        self.FRS       = 0         # frames/sec read by external program
+        self.alpha     = alpha     # smoothing factor for estimating fps and FRS
+        # explicitly set the correct framerate per mode or there can be trouble
+        self.framerate = {0:21, 1:28, 2:30, 3:60, 4:120}
  
     def open(self, gstreamer_pipeline_string):
         try:
-            self.video_capture = cv2.VideoCapture(
-                gstreamer_pipeline_string, cv2.CAP_GSTREAMER
-            )
+            self.video_capture = cv2.VideoCapture(gstreamer_pipeline_string, 
+                                                  cv2.CAP_GSTREAMER)
             
         except RuntimeError:
             self.video_capture = None
@@ -123,62 +124,50 @@ class CSI_Camera:
             try:
                 grabbed, frame = self.video_capture.read()
                 with self.read_lock:
-                    self.grabbed=grabbed
-                    self.frame=frame
-                    self.frames_read += 1
+                    self.grabbed = grabbed
+                    self.frame   = frame
+                    dt           = time() - self.last_grab
+                    self.last_grab = time()
+                    # estimate grabbing rate
+                    self.fps = self.alpha * self.fps + (1 - self.alpha) / dt
             except RuntimeError:
                 print("Could not read image from camera")
-        # FIX ME - stop and cleanup thread
-        # Something bad happened
         
     def read(self):
         with self.read_lock:
-            frame = self.frame.copy()
-            grabbed=self.grabbed
+            frame   = self.frame.copy()
+            grabbed = self.grabbed
+            dt      = time() - self.last_time
+            self.last_time = time()
         if self.display_fps:
-            txt = "Frames Disp: {}".format(self.last_frames_displayed)
+            # estimate reading rate
+            self.FRS = self.alpha * self.FRS + (1 - self.alpha) / dt
+            txt = "Frames Read/   Sec: {:3.1f}".format(self.FRS)
             cv2.putText(frame, txt, (10,20), self.font_face, self.scale, self.color, 1, cv2.LINE_AA)
-            txt = "Frames Read: {}".format(self.last_frames_read)
-            cv2.putText(frame, txt, (10,40), self.font_face, self.scale, self.color, 1, cv2.LINE_AA)
+            txt = "Frames Grabbed/Sec: {:3.1f}".format(self.fps)
+            cv2.putText(frame, txt, (10,50), self.font_face, self.scale, self.color, 1, cv2.LINE_AA)
         return grabbed, frame
 
     def release(self):
         if self.video_capture != None:
             self.video_capture.release()
             self.video_capture = None
-        # Kill the timer
-        self.fps_timer.cancel()
-        self.fps_timer.join()
-        # Now kill the thread
+        # kill the thread
         if self.read_thread != None:
             self.read_thread.join()
-
-    def update_fps_stats(self):
-        self.last_frames_read      = self.frames_read
-        self.last_frames_displayed = self.frames_displayed
-        # Start the next measurement cycle
-        self.frames_read      = 0
-        self.frames_displayed = 0
-
-    def start_counting_fps(self):
-        self.fps_timer=RepeatTimer(1.0, self.update_fps_stats)
-        self.fps_timer.start()
 
     @property
     def gstreamer_pipeline(self):
         return self._gstreamer_pipeline
 
-    # WS mod: Set the default framerate parameter to 21, the minimum for all modes: the sensor_mode
-    #         overrides this anyway, so no need to use this parameter. It was found that if the
-    #         framerate parameter exceeds the sensor_mode's default framerate setting (eg, 28 for
-    #         mode 1) the program will core dump with a message that the framerate is exceeding
-    #         the default, and a reboot of the nano is required to run again with the corrected
-    #         framerate.
+    # WS mod: Important to explicitly set the framerate appropriately for the sensor mode. 
+    #         If the framerate is too fast for the sensor mode, the program can core dump. If
+    #         the framerate is too slow for the sensor mode, the sensor-mode's framerate
+    #         will be overridden and slower than desired. To get around this, the framerate is
+    #         set using a dictionary that explicitly maps sensor mode to framerate. 
 
-    # Currently there are setting frame rate on CSI Camera on Nano through gstreamer
-    # Here we directly select sensor_mode 3 (1280x720, 59.9999 fps)
     def create_gstreamer_pipeline(self, sensor_id=0, sensor_mode=3, display_width=1280,
-                                  display_height=720, framerate=21, flip_method=0):
+                                  display_height=720, flip_method=0):
 
         self._gstreamer_pipeline = (
             "nvarguscamerasrc sensor-id=%d sensor-mode=%d ! "
@@ -188,7 +177,8 @@ class CSI_Camera:
             "video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx ! "
             "videoconvert ! "
             "video/x-raw, format=(string)BGR ! appsink"
-            % (sensor_id, sensor_mode, framerate, flip_method, display_width, display_height)
+            % (sensor_id, sensor_mode, self.framerate[sensor_mode], flip_method, 
+               display_width, display_height)
         )
 
 
